@@ -10,9 +10,8 @@ class EarlyRewardLoss(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, log_class_probabilities, probability_stopping, y_true, return_stats=False):
-        N, T, C = log_class_probabilities.shape
-        
-        y_true = y_true.repeat(1, T)
+        y_true = y_true.permute(1,0)
+        T, N, C = log_class_probabilities.shape
         
 
         # equation 3
@@ -25,10 +24,17 @@ class EarlyRewardLoss(nn.Module):
         t = torch.ones(N, T, device=log_class_probabilities.device) * \
                   torch.arange(T).type(torch.FloatTensor).to(log_class_probabilities.device)
 
-        earliness_reward = Pt * probability_correct_class(log_class_probabilities, y_true) * (1 - t / T)
+        y_haty = probability_correct_class(log_class_probabilities, y_true)
+        y_haty = y_haty.permute(1,0)
+        t = t.permute(1,0)
+        earliness_reward = Pt * y_haty * (1 - t / T)
         earliness_reward = earliness_reward.sum(1).mean(0)
         # equation 6 left term
-        cross_entropy = self.negative_log_likelihood(log_class_probabilities.view(N*T,C), y_true.view(N*T)).view(N,T)
+        y_true = y_true.reshape(T*N)
+        log_class_probabilities = log_class_probabilities.view(T*N,C)
+        
+        
+        cross_entropy = self.negative_log_likelihood(log_class_probabilities, y_true).view(T,N)
         classification_loss = (cross_entropy * Pt).sum(1).mean(0)
 
         # equation 6
@@ -72,7 +78,7 @@ def calculate_probability_making_decision(deltas):
 
 def probability_correct_class(logprobabilities, targets):
     
-    batchsize, seqquencelength, nclasses = logprobabilities.shape
+    seqquencelength, batchsize, nclasses = logprobabilities.shape
     
 
     eye = torch.eye(nclasses).type(torch.ByteTensor).to(logprobabilities.device)

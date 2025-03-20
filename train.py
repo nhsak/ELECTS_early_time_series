@@ -11,6 +11,7 @@ import pandas as pd
 import argparse
 import os
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Run ELECTS Early Classification training on the BavarianCrops dataset.')
     parser.add_argument('--dataset', type=str, default="bugsense", choices=["bavariancrops","breizhcrops", "ghana", "southsudan","unitedstates", "bugsense"], help="dataset")
@@ -28,7 +29,7 @@ def parse_args():
     parser.add_argument('--sequencelength', type=int, default=80, help="sequencelength of the time series. If samples are shorter, "
                                                                 "they are zero-padded until this length; "
                                                                 "if samples are longer, they will be undersampled")
-    parser.add_argument('--batchsize', type=int, default=16, help="number of samples per batch")
+    parser.add_argument('--batchsize', type=int, default=8, help="number of samples per batch")
     parser.add_argument('--dataroot', type=str, default=os.path.join(os.environ["HOME"],"elects_data"), help="directory to download the "
                                                                                  "BavarianCrops dataset (400MB)."
                                                                                  "Defaults to home directory.")
@@ -55,7 +56,7 @@ def main(args):
     #     test_ds = BavarianCrops(root=dataroot,partition="valid", sequencelength=args.sequencelength)
     if args.dataset == "bugsense":
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = os.path.join(script_dir, "..", "..", "..",  "BugSenseData")
+        root_dir = os.path.join(script_dir, "..", "..", "..",  "BugSenseData", "Usable")
         nclasses = 6
         input_dim = 3
         train_ds = BugSenseData(root_dir, partition="train", sequencelength=args.sequencelength)
@@ -112,16 +113,18 @@ def main(args):
 
     else:
         raise ValueError(f"dataset {args.dataset} not recognized")
-
+    print("Train Data: ",len(train_ds))
+    print("Test Data: ", len(test_ds))
     traindataloader = DataLoader(
         train_ds,
-        batch_size=args.batchsize)
+        batch_size=args.batchsize,
+        drop_last=True)
     testdataloader = DataLoader(
         test_ds,
-        batch_size=args.batchsize)
+        batch_size=args.batchsize,
+        drop_last=True)
 
     model = EarlyRNN(nclasses=nclasses, input_dim=input_dim).to(args.device)
-
 
     #optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
 
@@ -151,6 +154,7 @@ def main(args):
     else:
         train_stats = []
         start_epoch = 1
+
     visdom_logger = VisdomLogger()
 
     not_improved = 0
@@ -240,18 +244,20 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     for batch in dataloader:
         optimizer.zero_grad()
         X, y_true = batch
+      
         X, y_true = X.to(device), y_true.to(device)
         log_class_probabilities, probability_stopping = model(X)
-
         loss = criterion(log_class_probabilities, probability_stopping, y_true)
-
         #assert not loss.isnan().any()
-        if not loss.isnan().any():
+        if not torch.isnan(loss).any():
             loss.backward()
+            # for name, param in model.named_parameters():
+            #     if param.grad is not None:
+            #         print(f"Layer: {name} | Gradient mean: {param.grad.abs().mean():.6f} | Gradient max: {param.grad.abs().max():.6f}")
+
             optimizer.step()
 
             losses.append(loss.cpu().detach().numpy())
-
     return np.stack(losses).mean()
 
 def test_epoch(model, dataloader, criterion, device):
@@ -262,7 +268,7 @@ def test_epoch(model, dataloader, criterion, device):
     for batch in dataloader:
         X, y_true = batch
         X, y_true = X.to(device), y_true.to(device)
-        print(X.shape)
+
         log_class_probabilities, probability_stopping, predictions_at_t_stop, t_stop = model.predict(X)
         loss, stat = criterion(log_class_probabilities, probability_stopping, y_true, return_stats=True)
 

@@ -6,16 +6,49 @@ import os
 #from models.EarlyClassificationModel import EarlyClassificationModel
 from torch.nn.modules.normalization import LayerNorm
 
+
+class CNNFeatureExtractor(nn.Module):
+    def __init__(self, in_channels=3, hidden_dim=64):
+        super(CNNFeatureExtractor, self).__init__()
+        
+        self.cnn = nn.Sequential(
+            nn.Conv3d(in_channels, 16, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
+            nn.BatchNorm3d(16),
+            nn.ReLU(),
+            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),  # Don't pool in time dimension yet
+            
+            nn.Conv3d(16, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),
+            
+            nn.Conv3d(32, 64, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
+            nn.BatchNorm3d(64),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool3d((None, 1, 1))  # Pool spatial dimensions to 1x1, preserve time
+        )
+        
+    def forward(self, x):
+   
+        features = self.cnn(x)
+        
+        # Reshape to [T, B, F] for RNN
+        features = features.permute(2, 0, 1, 3, 4).contiguous()
+        features = features.view(features.size(0), features.size(1), -1)
+        
+        return features
+
 class EarlyRNN(nn.Module):
-    def __init__(self, input_dim=3, hidden_dims=64, nclasses=6, num_rnn_layers=2, dropout=0.2):
+    def __init__(self, input_dim=3, hidden_dims=64, nclasses=6, num_rnn_layers=4, dropout=0.2):
         super(EarlyRNN, self).__init__()
 
-        # input transformations
-        self.intransforms = nn.Sequential(
-            nn.LayerNorm(input_dim), # normalization over D-dimension. T-dimension is untouched
-            nn.Linear(input_dim, hidden_dims) # project to hidden_dims length
-        )
+        # # input transformations
+        # self.intransforms = nn.Sequential(
+        #     nn.LayerNorm(input_dim), # normalization over D-dimension. T-dimension is untouched
+        #     nn.Linear(input_dim, hidden_dims) # project to hidden_dims length
+        # )
 
+        self.intransforms = CNNFeatureExtractor(input_dim, hidden_dims)
         self.backbone = nn.LSTM(input_size=hidden_dims, hidden_size=hidden_dims, num_layers=num_rnn_layers,
                             bias=False, batch_first=True, dropout=dropout, bidirectional=False)
 
