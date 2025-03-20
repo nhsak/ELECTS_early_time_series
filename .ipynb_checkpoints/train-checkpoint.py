@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--dataroot', type=str, default=os.path.join(os.environ["HOME"],"elects_data"), help="directory to download the "
                                                                                  "BavarianCrops dataset (400MB)."
                                                                                  "Defaults to home directory.")
-    parser.add_argument('--snapshot', type=str, default="snapshots/bugsense_model.pth",
+    parser.add_argument('--snapshot', type=str, default="snapshots/model.pth",
                         help="pytorch state dict snapshot file")
     parser.add_argument('--resume', action='store_true')
 
@@ -214,7 +214,6 @@ def main(args):
                                                       os.path.basename(args.snapshot).replace(".pth", "_optimizer.pth")
                                                       )
                     torch.save(optimizer.state_dict(), optimizer_snapshot)
-                    
 
                     df.to_csv(args.snapshot + ".csv")
                     not_improved = 0 # reset early stopping counter
