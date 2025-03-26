@@ -10,18 +10,21 @@ import sklearn.metrics
 import pandas as pd
 import argparse
 import os
+from torch.utils.tensorboard import SummaryWriter
+    
 
+writer = SummaryWriter()
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run ELECTS Early Classification training on the BavarianCrops dataset.')
     parser.add_argument('--dataset', type=str, default="bugsense", choices=["bavariancrops","breizhcrops", "ghana", "southsudan","unitedstates", "bugsense"], help="dataset")
-    parser.add_argument('--alpha', type=float, default=0.5, help="trade-off parameter of earliness and accuracy (eq 6): "
+    parser.add_argument('--alpha', type=float, default=1, help="trade-off parameter of earliness and accuracy (eq 6): "
                                                                  "1=full weight on accuracy; 0=full weight on earliness")
     parser.add_argument('--epsilon', type=float, default=10, help="additive smoothing parameter that helps the "
                                                                   "model recover from too early classificaitons (eq 7)")
     parser.add_argument('--learning-rate', type=float, default=1e-3, help="Optimizer learning rate")
     parser.add_argument('--weight-decay', type=float, default=0, help="weight_decay")
-    parser.add_argument('--patience', type=int, default=30, help="Early stopping patience")
+    parser.add_argument('--patience', type=int, default=5, help="Early stopping patience")
     parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         choices=["cuda", "cpu"], help="'cuda' (GPU) or 'cpu' device to run the code. "
                                                      "defaults to 'cuda' if GPU is available, otherwise 'cpu'")
@@ -33,7 +36,7 @@ def parse_args():
     parser.add_argument('--dataroot', type=str, default=os.path.join(os.environ["HOME"],"elects_data"), help="directory to download the "
                                                                                  "BavarianCrops dataset (400MB)."
                                                                                  "Defaults to home directory.")
-    parser.add_argument('--snapshot', type=str, default="snapshots/bugsense_model.pth",
+    parser.add_argument('--snapshot', type=str, default="./snapshots/bugsense_model.pth",
                         help="pytorch state dict snapshot file")
     parser.add_argument('--resume', action='store_true')
 
@@ -44,91 +47,37 @@ def parse_args():
         args.patience = None
 
     return args
+    
 
 def main(args):
-
-    # if args.dataset == "bavariancrops":
-    #     dataroot = os.path.join(args.dataroot,"bavariancrops")
-    #     nclasses = 7
-    #     input_dim = 13
-    #     class_weights = None
-    #     train_ds = BavarianCrops(root=dataroot,partition="train", sequencelength=args.sequencelength)
-    #     test_ds = BavarianCrops(root=dataroot,partition="valid", sequencelength=args.sequencelength)
     if args.dataset == "bugsense":
         script_dir = os.path.dirname(os.path.abspath(__file__))
         root_dir = os.path.join(script_dir, "..", "..", "..",  "BugSenseData", "Usable")
         nclasses = 6
         input_dim = 3
         train_ds = BugSenseData(root_dir, partition="train", sequencelength=args.sequencelength)
-        test_ds = BugSenseData(root_dir, partition="valid", sequencelength=args.sequencelength)
-    # elif args.dataset == "unitedstates":
-    #     args.dataroot = "/data/modiscdl/"
-    #     args.sequencelength = 24
-    #     dataroot = args.dataroot
-    #     nclasses = 8
-    #     input_dim = 1
-    #     train_ds = ModisCDL(root=dataroot,partition="train", sequencelength=args.sequencelength)
-    #     test_ds = ModisCDL(root=dataroot,partition="valid", sequencelength=args.sequencelength)
-    # elif args.dataset == "breizhcrops":
-    #     dataroot = os.path.join(args.dataroot,"breizhcrops")
-    #     nclasses = 9
-    #     input_dim = 13
-    #     train_ds = BreizhCrops(root=dataroot,partition="train", sequencelength=args.sequencelength)
-    #     test_ds = BreizhCrops(root=dataroot,partition="valid", sequencelength=args.sequencelength)
-    # elif args.dataset in ["ghana"]:
-    #     use_s2_only = False
-    #     average_pixel = False
-    #     max_n_pixels = 50
-    #     dataroot = args.dataroot
-    #     nclasses = 4
-    #     input_dim = 12 if use_s2_only else 19  # 12 sentinel 2 + 3 x sentinel 1 + 4 * planet
-    #     args.epochs = 500
-    #     args.sequencelength = 365
-    #     train_ds = SustainbenchCrops(root=dataroot,partition="train", sequencelength=args.sequencelength,
-    #                                  country="ghana",
-    #                                  use_s2_only=use_s2_only, average_pixel=average_pixel,
-    #                                  max_n_pixels=max_n_pixels)
-    #     val_ds = SustainbenchCrops(root=dataroot,partition="val", sequencelength=args.sequencelength,
-    #                                 country="ghana", use_s2_only=use_s2_only, average_pixel=average_pixel,
-    #                                 max_n_pixels=max_n_pixels)
-
-    #     train_ds = torch.utils.data.ConcatDataset([train_ds, val_ds])
-
-    #     test_ds = SustainbenchCrops(root=dataroot,partition="test", sequencelength=args.sequencelength,
-    #                                 country="ghana", use_s2_only=use_s2_only, average_pixel=average_pixel,
-    #                                 max_n_pixels=max_n_pixels)
-    # elif args.dataset in ["southsudan"]:
-    #     use_s2_only = False
-    #     dataroot = args.dataroot
-    #     nclasses = 4
-    #     args.sequencelength = 365
-    #     input_dim = 12 if use_s2_only else 19 # 12 sentinel 2 + 3 x sentinel 1 + 4 * planet
-    #     args.epochs = 500
-    #     train_ds = SustainbenchCrops(root=dataroot,partition="train", sequencelength=args.sequencelength, country="southsudan", use_s2_only=use_s2_only)
-    #     val_ds = SustainbenchCrops(root=dataroot,partition="val", sequencelength=args.sequencelength, country="southsudan", use_s2_only=use_s2_only)
-
-    #     train_ds = torch.utils.data.ConcatDataset([train_ds, val_ds])
-    #     test_ds = SustainbenchCrops(root=dataroot, partition="val", sequencelength=args.sequencelength,
-    #                                country="southsudan", use_s2_only=use_s2_only)
+        val_ds = BugSenseData(root_dir, partition="valid", sequencelength=args.sequencelength)
+        test_ds = BugSenseData(root_dir, partition="eval", sequencelength=args.sequencelength)
+    
 
     else:
         raise ValueError(f"dataset {args.dataset} not recognized")
     print("Train Data: ",len(train_ds))
+    print("Validation Data: ", len(val_ds))
     print("Test Data: ", len(test_ds))
+
+
     traindataloader = DataLoader(
         train_ds,
         batch_size=args.batchsize,
         drop_last=True)
-    testdataloader = DataLoader(
-        test_ds,
+    valdataloader = DataLoader(
+        val_ds,
         batch_size=args.batchsize,
         drop_last=True)
 
     model = EarlyRNN(nclasses=nclasses, input_dim=input_dim).to(args.device)
 
-    #optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-
-    # exclude decision head linear bias from weight decay
     decay, no_decay = list(), list()
     for name, param in model.named_parameters():
         if name == "stopping_decision_head.projection.0.bias":
@@ -161,11 +110,12 @@ def main(args):
     with tqdm(range(start_epoch, args.epochs + 1)) as pbar:
         for epoch in pbar:
             trainloss = train_epoch(model, traindataloader, optimizer, criterion, device=args.device)
-            testloss, stats = test_epoch(model, testdataloader, criterion, args.device)
+            testloss, stats = test_epoch(model, valdataloader, criterion, args.device)
             print("testloss: ", testloss)
             print("trainloss: ", trainloss)
             print("y_true shape: ", stats["targets"][:,0])
             print("predictions at t stop: ", stats["predictions_at_t_stop"][:,0])
+            print("t_stop: ", stats["t_stop"][:,0])
 
             # statistic logging and visualization...
             precision, recall, fscore, support = sklearn.metrics.precision_recall_fscore_support(
@@ -198,6 +148,16 @@ def main(args):
                     earliness_reward=earliness_reward
                 )
             )
+
+            writer.add_scalar('Loss/train', trainloss, epoch)
+            writer.add_scalar('Loss/test', testloss, epoch)
+            writer.add_scalar('Accuracy', accuracy, epoch)
+            writer.add_scalar('Precision', precision, epoch)
+            writer.add_scalar('Recall', recall, epoch)
+            writer.add_scalar('F1', fscore, epoch)
+            writer.add_scalar('Kappa', kappa, epoch)
+            writer.add_scalar('Earliness', earliness, epoch)
+
 
             visdom_logger(stats)
             visdom_logger.plot_boxplot(stats["targets"][:,0], stats["t_stop"][:, 0], tmin=0, tmax=args.sequencelength)
@@ -238,22 +198,21 @@ def main(args):
                     print(f"stopping training. testloss {testloss:.2f} did not improve in {args.patience} epochs.")
                     break
 
+
+    return train_ds, val_ds, test_ds
+
 def train_epoch(model, dataloader, optimizer, criterion, device):
     losses = []
     model.train()
     for batch in dataloader:
         optimizer.zero_grad()
         X, y_true = batch
-      
+
         X, y_true = X.to(device), y_true.to(device)
         log_class_probabilities, probability_stopping = model(X)
         loss = criterion(log_class_probabilities, probability_stopping, y_true)
-        #assert not loss.isnan().any()
         if not torch.isnan(loss).any():
             loss.backward()
-            # for name, param in model.named_parameters():
-            #     if param.grad is not None:
-            #         print(f"Layer: {name} | Gradient mean: {param.grad.abs().mean():.6f} | Gradient max: {param.grad.abs().max():.6f}")
 
             optimizer.step()
 
@@ -290,4 +249,5 @@ def test_epoch(model, dataloader, criterion, device):
 
 if __name__ == '__main__':
     args = parse_args()
-    main(args)
+    train_ds, val_ds, test_ds = main(args)
+    

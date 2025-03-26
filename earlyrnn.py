@@ -10,36 +10,52 @@ from torch.nn.modules.normalization import LayerNorm
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, in_channels=3, hidden_dim=64):
         super(CNNFeatureExtractor, self).__init__()
+
+        self.layernorm = LayerNorm(in_channels)
         
         self.cnn = nn.Sequential(
             nn.Conv3d(in_channels, 16, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
             nn.BatchNorm3d(16),
             nn.ReLU(),
-            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),  # Don't pool in time dimension yet
+            nn.Dropout3d(p=0.2),  # Add dropout
             
+            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),
+
             nn.Conv3d(16, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
             nn.BatchNorm3d(32),
             nn.ReLU(),
-            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),
+            nn.Dropout3d(p=0.2),  
             
+            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),
+
             nn.Conv3d(32, 64, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
             nn.BatchNorm3d(64),
             nn.ReLU(),
-            nn.AdaptiveAvgPool3d((None, 1, 1))  # Pool spatial dimensions to 1x1, preserve time
+            nn.Dropout3d(p=0.2),
+
+            nn.AdaptiveAvgPool3d((None, 1, 1))
         )
+
+        self.linear = nn.Linear(3*190*20, hidden_dim)
+        
         
     def forward(self, x):
-   
+        # x_permuted = x.permute(0, 2, 3, 4, 1)  # Move channels to last dim
+        # x_normed = self.layernorm(x_permuted)  # Apply LayerNorm
+        # x_flattend = x.view(8, 80, -1)
+        # features = self.linear(x_flattend)
+
+        # x_normed = x_normed.permute(0, 4, 1, 2, 3)
+
         features = self.cnn(x)
         
-        # Reshape to [T, B, F] for RNN
-        features = features.permute(2, 0, 1, 3, 4).contiguous()
-        features = features.view(features.size(0), features.size(1), -1)
+        features = features.squeeze(-1).squeeze(-1)
+        features = features.permute(0, 2, 1)
         
         return features
 
 class EarlyRNN(nn.Module):
-    def __init__(self, input_dim=3, hidden_dims=64, nclasses=6, num_rnn_layers=4, dropout=0.2):
+    def __init__(self, input_dim=3, hidden_dims=64, nclasses=6, num_rnn_layers=1, dropout=0.2):
         super(EarlyRNN, self).__init__()
 
         # # input transformations
@@ -58,11 +74,11 @@ class EarlyRNN(nn.Module):
 
     def forward(self, x):
         x = self.intransforms(x)
-
+        
         outputs, last_state_list = self.backbone(x)
-
         log_class_probabilities = self.classification_head(outputs)
         probabilitiy_stopping = self.stopping_decision_head(outputs)
+        print(probabilitiy_stopping)
 
         return log_class_probabilities, probabilitiy_stopping
 
@@ -100,6 +116,7 @@ class EarlyRNN(nn.Module):
 
         # all predictions
         predictions = logprobabilities.argmax(-1)
+        
 
         # predictions at time of stopping
         predictions_at_t_stop = torch.masked_select(predictions, first_stops)
@@ -127,11 +144,13 @@ class DecisionHead(torch.nn.Module):
         )
 
         # initialize bias to predict late in first epochs
-        torch.nn.init.normal_(self.projection[0].bias, mean=-2e1, std=1e-1)
+        # torch.nn.init.normal_(self.projection[0].bias, mean=-2, std=1e-1)
 
 
     def forward(self, x):
-        return self.projection(x).squeeze(2)
+        output = self.projection(x).squeeze(2)
+        return output
+    
 
 if __name__ == "__main__":
     model = EarlyRNN()

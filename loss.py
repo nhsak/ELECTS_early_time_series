@@ -10,9 +10,7 @@ class EarlyRewardLoss(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, log_class_probabilities, probability_stopping, y_true, return_stats=False):
-        y_true = y_true.permute(1,0)
-        T, N, C = log_class_probabilities.shape
-        
+        N, T, C = log_class_probabilities.shape
 
         # equation 3
         Pt = calculate_probability_making_decision(probability_stopping)
@@ -24,17 +22,11 @@ class EarlyRewardLoss(nn.Module):
         t = torch.ones(N, T, device=log_class_probabilities.device) * \
                   torch.arange(T).type(torch.FloatTensor).to(log_class_probabilities.device)
 
-        y_haty = probability_correct_class(log_class_probabilities, y_true)
-        y_haty = y_haty.permute(1,0)
-        t = t.permute(1,0)
-        earliness_reward = Pt * y_haty * (1 - t / T)
+        earliness_reward = Pt * probability_correct_class(log_class_probabilities, y_true) * (1 - t / T)
         earliness_reward = earliness_reward.sum(1).mean(0)
+
         # equation 6 left term
-        y_true = y_true.reshape(T*N)
-        log_class_probabilities = log_class_probabilities.view(T*N,C)
-        
-        
-        cross_entropy = self.negative_log_likelihood(log_class_probabilities, y_true).view(T,N)
+        cross_entropy = self.negative_log_likelihood(log_class_probabilities.view(N*T,C), y_true.view(N*T)).view(N,T)
         classification_loss = (cross_entropy * Pt).sum(1).mean(0)
 
         # equation 6
@@ -58,7 +50,6 @@ def calculate_probability_making_decision(deltas):
     :return: comulative probability of having stopped
     """
     batchsize, sequencelength = deltas.shape
-    
 
     pts = list()
 
@@ -77,13 +68,12 @@ def calculate_probability_making_decision(deltas):
     return torch.stack(pts, dim=-1)
 
 def probability_correct_class(logprobabilities, targets):
-    
-    seqquencelength, batchsize, nclasses = logprobabilities.shape
-    
+    batchsize, seqquencelength, nclasses = logprobabilities.shape
 
     eye = torch.eye(nclasses).type(torch.ByteTensor).to(logprobabilities.device)
 
     targets_one_hot = eye[targets]
-   
+
+    # implement the y*\hat{y} part of the loss function
     y_haty = torch.masked_select(logprobabilities, targets_one_hot.bool())
-    return y_haty.view(batchsize, seqquencelength).exp()  
+    return y_haty.view(batchsize, seqquencelength).exp()
