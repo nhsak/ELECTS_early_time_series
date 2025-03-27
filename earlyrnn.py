@@ -55,7 +55,7 @@ class CNNFeatureExtractor(nn.Module):
         return features
 
 class EarlyRNN(nn.Module):
-    def __init__(self, input_dim=3, hidden_dims=64, nclasses=6, num_rnn_layers=2, dropout=0.2):
+    def __init__(self, input_dim=3, hidden_dims=64, nclasses=6, num_rnn_layers=4, dropout=0.2):
         super(EarlyRNN, self).__init__()
 
         # # input transformations
@@ -102,7 +102,7 @@ class EarlyRNN(nn.Module):
                 # make sure to stop last
                 last_stop = torch.ones(tuple(stop_now.shape)).bool()
                 if torch.cuda.is_available():
-                    last_stop = last_stop.cuda()
+                    last_stop = last_stop.cpu()
                 stop.append(last_stop)
 
         # stack over the time dimension (multiple stops possible)
@@ -144,7 +144,7 @@ class DecisionHead(torch.nn.Module):
         )
 
         # initialize bias to predict late in first epochs
-        torch.nn.init.normal_(self.projection[0].bias, mean=-2, std=1e-1)
+        torch.nn.init.normal_(self.projection[0].bias, mean=-20, std=1e-1)
 
 
     def forward(self, x):

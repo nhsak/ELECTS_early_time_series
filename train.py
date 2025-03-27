@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument('--learning-rate', type=float, default=1e-3, help="Optimizer learning rate")
     parser.add_argument('--weight-decay', type=float, default=0, help="weight_decay")
     parser.add_argument('--patience', type=int, default=30, help="Early stopping patience")
-    parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu",
+    parser.add_argument('--device', type=str, default="cpu" if torch.cuda.is_available() else "cpu",
                         choices=["cuda", "cpu"], help="'cuda' (GPU) or 'cpu' device to run the code. "
                                                      "defaults to 'cuda' if GPU is available, otherwise 'cpu'")
     parser.add_argument('--epochs', type=int, default=100, help="number of training epochs")
