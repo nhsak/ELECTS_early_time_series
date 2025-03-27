@@ -18,14 +18,14 @@ writer = SummaryWriter()
 def parse_args():
     parser = argparse.ArgumentParser(description='Run ELECTS Early Classification training on the BavarianCrops dataset.')
     parser.add_argument('--dataset', type=str, default="bugsense", choices=["bavariancrops","breizhcrops", "ghana", "southsudan","unitedstates", "bugsense"], help="dataset")
-    parser.add_argument('--alpha', type=float, default=1, help="trade-off parameter of earliness and accuracy (eq 6): "
+    parser.add_argument('--alpha', type=float, default=0.1, help="trade-off parameter of earliness and accuracy (eq 6): "
                                                                  "1=full weight on accuracy; 0=full weight on earliness")
-    parser.add_argument('--epsilon', type=float, default=10, help="additive smoothing parameter that helps the "
+    parser.add_argument('--epsilon', type=float, default=3, help="additive smoothing parameter that helps the "
                                                                   "model recover from too early classificaitons (eq 7)")
     parser.add_argument('--learning-rate', type=float, default=1e-3, help="Optimizer learning rate")
     parser.add_argument('--weight-decay', type=float, default=0, help="weight_decay")
     parser.add_argument('--patience', type=int, default=30, help="Early stopping patience")
-    parser.add_argument('--device', type=str, default="cpu" if torch.cuda.is_available() else "cpu",
+    parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         choices=["cuda", "cpu"], help="'cuda' (GPU) or 'cpu' device to run the code. "
                                                      "defaults to 'cuda' if GPU is available, otherwise 'cpu'")
     parser.add_argument('--epochs', type=int, default=100, help="number of training epochs")

@@ -10,47 +10,54 @@ from torch.nn.modules.normalization import LayerNorm
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, in_channels=3, hidden_dim=64):
         super(CNNFeatureExtractor, self).__init__()
-
-        self.layernorm = LayerNorm(in_channels)
         
+        # 2D CNN for processing individual images
         self.cnn = nn.Sequential(
-            nn.Conv3d(in_channels, 16, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
-            nn.BatchNorm3d(16),
+            nn.Conv2d(in_channels, 16, kernel_size=(3, 3), padding=(1, 1)),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
-            nn.Dropout3d(p=0.2),  # Add dropout
+            nn.Dropout2d(p=0.2),
             
-            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
 
-            nn.Conv3d(16, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
-            nn.BatchNorm3d(32),
-            nn.ReLU(),
-            nn.Dropout3d(p=0.2),  
+            # nn.Conv2d(16, 32, kernel_size=(3, 3), padding=(1, 1)),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(),
+            # nn.Dropout2d(p=0.2),
             
-            nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2)),
+            # nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
 
-            nn.Conv3d(32, 64, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.Dropout3d(p=0.2),
+            # nn.Conv2d(32, 64, kernel_size=(3, 3), padding=(1, 1)),
+            # nn.BatchNorm2d(64),
+            # nn.ReLU(),
+            # nn.Dropout2d(p=0.2),
 
-            nn.AdaptiveAvgPool3d((None, 1, 1))
+            nn.AdaptiveAvgPool2d((1, 1))
         )
-
-        self.linear = nn.Linear(3*190*20, hidden_dim)
         
+        # Final projection to hidden dimension
+        self.projection = nn.Sequential(
+            nn.Linear(16, hidden_dim),
+            nn.LayerNorm(hidden_dim)
+        )
         
     def forward(self, x):
-        # x_permuted = x.permute(0, 2, 3, 4, 1)  # Move channels to last dim
-        # x_normed = self.layernorm(x_permuted)  # Apply LayerNorm
-        # x_flattend = x.view(8, 80, -1)
-        # features = self.linear(x_flattend)
-
-        # x_normed = x_normed.permute(0, 4, 1, 2, 3)
-
-        features = self.cnn(x)
+        # x shape: [batch_size, channels, seq_length, height, width]
+        batch_size, channels, seq_length, height, width = x.shape
         
-        features = features.squeeze(-1).squeeze(-1)
-        features = features.permute(0, 2, 1)
+        # Reshape to process each image independently
+        x_reshaped = x.permute(0, 2, 1, 3, 4).contiguous()  # [batch_size, seq_length, channels, height, width]
+        x_reshaped = x_reshaped.view(batch_size * seq_length, channels, height, width)
+        
+        # Apply CNN to each image
+        features = self.cnn(x_reshaped)  # [batch_size * seq_length, 64, 1, 1]
+        features = features.squeeze(-1).squeeze(-1)  # [batch_size * seq_length, 64]
+        
+        # Project to hidden dimension
+        features = self.projection(features)  # [batch_size * seq_length, hidden_dim]
+        
+        # Reshape back to sequence form
+        features = features.view(batch_size, seq_length, -1)  # [batch_size, seq_length, hidden_dim]
         
         return features
 
@@ -102,7 +109,7 @@ class EarlyRNN(nn.Module):
                 # make sure to stop last
                 last_stop = torch.ones(tuple(stop_now.shape)).bool()
                 if torch.cuda.is_available():
-                    last_stop = last_stop.cpu()
+                    last_stop = last_stop.cuda()
                 stop.append(last_stop)
 
         # stack over the time dimension (multiple stops possible)
