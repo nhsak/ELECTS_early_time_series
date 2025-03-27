@@ -24,7 +24,7 @@ def parse_args():
                                                                   "model recover from too early classificaitons (eq 7)")
     parser.add_argument('--learning-rate', type=float, default=1e-3, help="Optimizer learning rate")
     parser.add_argument('--weight-decay', type=float, default=0, help="weight_decay")
-    parser.add_argument('--patience', type=int, default=5, help="Early stopping patience")
+    parser.add_argument('--patience', type=int, default=30, help="Early stopping patience")
     parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_available() else "cpu",
                         choices=["cuda", "cpu"], help="'cuda' (GPU) or 'cpu' device to run the code. "
                                                      "defaults to 'cuda' if GPU is available, otherwise 'cpu'")
@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument('--sequencelength', type=int, default=80, help="sequencelength of the time series. If samples are shorter, "
                                                                 "they are zero-padded until this length; "
                                                                 "if samples are longer, they will be undersampled")
-    parser.add_argument('--batchsize', type=int, default=8, help="number of samples per batch")
+    parser.add_argument('--batchsize', type=int, default=16, help="number of samples per batch")
     parser.add_argument('--dataroot', type=str, default=os.path.join(os.environ["HOME"],"elects_data"), help="directory to download the "
                                                                                  "BavarianCrops dataset (400MB)."
                                                                                  "Defaults to home directory.")
