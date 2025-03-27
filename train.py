@@ -53,11 +53,13 @@ def main(args):
     if args.dataset == "bugsense":
         script_dir = os.path.dirname(os.path.abspath(__file__))
         root_dir = os.path.join(script_dir, "..", "..", "..",  "BugSenseData", "Usable")
+        train_val_dir = os.path.join(root_dir, "train")
+        test_dir = os.path.join(root_dir, "test")
         nclasses = 6
         input_dim = 3
-        train_ds = BugSenseData(root_dir, partition="train", sequencelength=args.sequencelength)
-        val_ds = BugSenseData(root_dir, partition="valid", sequencelength=args.sequencelength)
-        test_ds = BugSenseData(root_dir, partition="eval", sequencelength=args.sequencelength)
+        train_ds = BugSenseData(train_val_dir, partition="train", sequencelength=args.sequencelength, split_ratio=(0.8, 0.2, 0))
+        val_ds = BugSenseData(train_val_dir, partition="valid", sequencelength=args.sequencelength, split_ratio=(0.8, 0.2, 0))
+        test_ds = BugSenseData(test_dir, partition="eval", sequencelength=args.sequencelength, split_ratio=(0,0,1))
     
 
     else:

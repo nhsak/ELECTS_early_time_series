@@ -12,6 +12,10 @@ class CNNFeatureExtractor(nn.Module):
         super(CNNFeatureExtractor, self).__init__()
 
         self.layernorm = LayerNorm(in_channels)
+        self.intransforms = nn.Sequential(
+            nn.LayerNorm(in_channels), # normalization over D-dimension. T-dimension is untouched
+            nn.Linear(in_channels, hidden_dim) # project to hidden_dims length
+        )
         
         self.cnn = nn.Sequential(
             nn.Conv3d(in_channels, 16, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
@@ -40,6 +44,7 @@ class CNNFeatureExtractor(nn.Module):
         
         
     def forward(self, x):
+        x = self.intransforms(x)
         # x_permuted = x.permute(0, 2, 3, 4, 1)  # Move channels to last dim
         # x_normed = self.layernorm(x_permuted)  # Apply LayerNorm
         # x_flattend = x.view(8, 80, -1)
@@ -47,9 +52,9 @@ class CNNFeatureExtractor(nn.Module):
 
         # x_normed = x_normed.permute(0, 4, 1, 2, 3)
 
-        features = self.cnn(x)
+        # features = self.cnn(x)
         
-        features = features.squeeze(-1).squeeze(-1)
+        features = x.squeeze(-1).squeeze(-1)
         features = features.permute(0, 2, 1)
         
         return features
